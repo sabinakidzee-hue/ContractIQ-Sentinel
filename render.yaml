@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: contractiq-sentinel-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    plan: free
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # ── IBM watsonx ──────────────────────────────────────────────────────────
+      - key: WATSONX_API_KEY
+        sync: false          # Set manually in Render dashboard
+
+      - key: WATSONX_PROJECT_ID
+        sync: false
+
+      - key: WATSONX_API_URL
+        value: https://us-south.ml.cloud.ibm.com
+
+      - key: WATSONX_MODEL_ID
+        value: ibm/granite-13b-instruct-v2
+
+      # ── IBM watsonx Orchestrate (optional) ───────────────────────────────────
+      - key: WATSONX_ORCHESTRATE_URL
+        sync: false
+
+      - key: WATSONX_ORCHESTRATE_AGENT_ID
+        sync: false
+
+      # ── MongoDB Atlas ────────────────────────────────────────────────────────
+      - key: MONGO_URI
+        sync: false          # Set manually in Render dashboard
+
+      # ── Server ───────────────────────────────────────────────────────────────
+      - key: PORT
+        value: 5000
+
+      - key: CLIENT_URL
+        value: https://contractiq-sentinel.vercel.app
+
+      # ── Feature flags ────────────────────────────────────────────────────────
+      - key: USE_MOCK_ANALYSIS
+        value: false

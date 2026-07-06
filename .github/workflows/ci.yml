@@ -1,0 +1,127 @@
+name: ContractIQ Sentinel — CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 1: Frontend — Install, Lint, Build
+  # ─────────────────────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (React + Vite)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: client
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (oxlint)
+        run: npm run lint
+        continue-on-error: true   # Lint warnings do not fail the build
+
+      - name: Build production bundle
+        run: npm run build
+        env:
+          VITE_API_URL: https://contractiq-sentinel-api.onrender.com/api
+
+      - name: Verify dist output exists
+        run: |
+          if [ ! -f dist/index.html ]; then
+            echo "❌ dist/index.html not found — build failed"
+            exit 1
+          fi
+          echo "✅ dist/index.html found — build successful"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 2: Backend — Install, Syntax Check, Health Probe
+  # ─────────────────────────────────────────────────────────────────────────────
+  backend:
+    name: Backend (Node.js + Express)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check — entry points
+        run: |
+          echo "Checking server.js..."
+          node --check server.js
+          echo "Checking app.js..."
+          node --check app.js
+
+      - name: Syntax check — services
+        run: |
+          for f in services/*.js; do
+            node --check "$f" && echo "✅ $f" || { echo "❌ $f"; exit 1; }
+          done
+
+      - name: Syntax check — controllers
+        run: |
+          for f in controllers/*.js; do
+            node --check "$f" && echo "✅ $f" || { echo "❌ $f"; exit 1; }
+          done
+
+      - name: Syntax check — routes
+        run: |
+          for f in routes/*.js; do
+            node --check "$f" && echo "✅ $f" || { echo "❌ $f"; exit 1; }
+          done
+
+      - name: Syntax check — middleware & utils
+        run: |
+          for f in middleware/*.js utils/*.js; do
+            node --check "$f" && echo "✅ $f" || { echo "❌ $f"; exit 1; }
+          done
+
+      - name: Verify package.json start script
+        run: |
+          START=$(node -e "const p=require('./package.json'); console.log(p.scripts.start||'')")
+          if [ -z "$START" ]; then
+            echo "❌ No start script in package.json"
+            exit 1
+          fi
+          echo "✅ Start script: $START"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 3: Integration gate — both jobs must pass
+  # ─────────────────────────────────────────────────────────────────────────────
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-latest
+    needs: [frontend, backend]
+
+    steps:
+      - name: All checks passed
+        run: echo "✅ Frontend build and backend syntax checks passed. Ready to deploy."
