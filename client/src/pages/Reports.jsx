@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box, Grid, Card, CardContent, Typography, Button,
   Table, TableBody, TableCell, TableContainer, TableHead,
@@ -23,7 +24,7 @@ import { dummyDeviations } from '../data/dummyData';
 // ─── Constants ────────────────────────────────────────────────────────────────
 // Demo contract ID — in production this comes from the ContractAnalysis page state
 // or a URL param. Hardcoded here so the Reports page works standalone.
-const DEMO_CONTRACT_ID = null;   // null → shows "select a contract" prompt
+// null → shows "select a contract" prompt
 
 const SHEET_DEFS = [
   {
@@ -93,6 +94,11 @@ function ReportHistorySkeleton() {
 
 export default function Reports() {
   const theme   = useTheme();
+  const location = useLocation();
+
+const contractId =
+  location.state?.contractId ||
+  localStorage.getItem('contractId');
 
   // ── Generate state ─────────────────────────────────────────────────────────
   const [generating,    setGenerating]    = useState(false);
@@ -247,7 +253,7 @@ export default function Reports() {
                   variant="contained"
                   size="large"
                   startIcon={<DescriptionOutlinedIcon />}
-                  onClick={() => handleGenerate(DEMO_CONTRACT_ID)}
+                  onClick={() => handleGenerate(contractId)}
                   sx={{ fontWeight: 700 }}
                 >
                   Generate Excel Report
