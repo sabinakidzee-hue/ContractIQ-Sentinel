@@ -31,7 +31,7 @@ Complete step-by-step guide to deploying ContractIQ Sentinel to production using
    ```
 6. Replace `<password>` with your actual password and append the database name:
    ```
-   mongodb+srv://contractiq-user:PASSWORD@cluster0.xxxxx.mongodb.net/contractiq?retryWrites=true&w=majority
+   MONGO_URI=<YOUR_MONGODB_ATLAS_CONNECTION_STRING>
    ```
    > Save this as `MONGO_URI` — you'll need it in Step 2.
 
