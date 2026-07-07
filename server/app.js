@@ -23,25 +23,38 @@ app.use(helmet());
 
 // CORS — allow the Vite dev server, the Vercel production URL,
 // and any Vercel preview deployment URL (*.vercel.app).
-const VERCEL_PREVIEW_RE = /^https:\/\/contractiq-sentinel.*\.vercel\.app$/;
 
+
+// ─── CORS ────────────────────────────────────────────────────────────────────
 const isAllowedOrigin = (origin) => {
-  if (!origin) return true;                                               // Postman / curl / health checks
-  if (origin === (process.env.CLIENT_URL || 'http://localhost:3000')) return true;
-  if (VERCEL_PREVIEW_RE.test(origin)) return true;
+  // Allow requests without an Origin header
+  // (Render health checks, curl, Postman)
+  if (!origin) return true;
+
+  // Local development
+  if (origin === 'http://localhost:3000') return true;
+
+  // Explicit production frontend (optional)
+  if (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) return true;
+
+  // Allow all Vercel deployments
+  if (origin.endsWith('.vercel.app')) return true;
+
   return false;
 };
 
 app.use(cors({
-  origin: (origin, callback) => {
-    if (isAllowedOrigin(origin)) return callback(null, true);
-    callback(new Error(`CORS policy does not allow origin: ${origin}`));
-  },
-  methods:          ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders:   ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials:      true,
-}));
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) {
+      return callback(null, true);
+    }
 
+    return callback(new Error(`CORS policy does not allow origin: ${origin}`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+}));
 // ─── Logging ──────────────────────────────────────────────────────────────────
 const morganFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
 app.use(morgan(morganFormat));
