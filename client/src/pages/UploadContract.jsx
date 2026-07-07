@@ -16,6 +16,7 @@ import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import SectionHeader from '../components/common/SectionHeader';
 import UploadIllustration from '../components/common/UploadIllustration';
+import { uploadContract, analyzeContract } from '../api/contracts.api';
 
 const STEPS = ['Select File', 'Review Details', 'Run Analysis'];
 const ACCEPTED_TYPES = { 'application/pdf': ['.pdf'], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] };
@@ -24,6 +25,17 @@ const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
 const SUPPORTED_TYPES = [
   { icon: <DescriptionOutlinedIcon />, label: 'PDF Documents', ext: '.pdf' },
   { icon: <ArticleOutlinedIcon />, label: 'Word Documents', ext: '.docx' },
+];
+
+// Progress stages shown in the UI during analysis
+const ANALYSIS_STAGES = [
+  { pct: 10, label: 'Uploading contract to server…' },
+  { pct: 25, label: 'Extracting contract text…' },
+  { pct: 45, label: 'Parsing clause structure…' },
+  { pct: 60, label: 'Sending to IBM watsonx Orchestrate…' },
+  { pct: 78, label: 'IBM Granite comparing against enterprise template…' },
+  { pct: 92, label: 'Generating risk assessment…' },
+  { pct: 100, label: 'Analysis complete!' },
 ];
 
 function formatBytes(bytes) {
@@ -83,6 +95,7 @@ export default function UploadContract() {
   const [isAnalysing, setIsAnalysing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisStep, setAnalysisStep] = useState('');
+  const [analysisError, setAnalysisError] = useState('');
 
   const onDrop = useCallback((accepted, rejected) => {
     setRejectionError('');
@@ -110,31 +123,67 @@ export default function UploadContract() {
     setFile(null);
     setActiveStep(0);
     setRejectionError('');
+    setAnalysisError('');
   };
 
-  const simulateAnalysis = () => {
+  /**
+   * Advances the progress bar to a target percentage over ~600 ms.
+   * Returns a promise that resolves when the animation finishes.
+   */
+  const advanceTo = (targetPct, label) =>
+    new Promise((resolve) => {
+      setAnalysisStep(label);
+      setAnalysisProgress(targetPct);
+      setTimeout(resolve, 650);
+    });
+
+  /**
+   * Real analysis flow:
+   * 1. POST /api/contracts/upload  → get MongoDB _id
+   * 2. POST /api/contracts/analyze → run AI analysis
+   * 3. Persist _id to localStorage and navigate to /analysis with _id in state
+   */
+  const runAnalysis = async () => {
+    if (!file) return;
+
     setIsAnalysing(true);
+    setAnalysisError('');
     setActiveStep(2);
-    const steps = [
-      { pct: 15, label: 'Extracting contract text…' },
-      { pct: 35, label: 'Parsing clause structure…' },
-      { pct: 55, label: 'Sending to IBM watsonx Orchestrate…' },
-      { pct: 75, label: 'IBM Granite comparing against enterprise template…' },
-      { pct: 90, label: 'Generating risk assessment…' },
-      { pct: 100, label: 'Analysis complete!' },
-    ];
-    let i = 0;
-    const tick = () => {
-      if (i < steps.length) {
-        setAnalysisProgress(steps[i].pct);
-        setAnalysisStep(steps[i].label);
-        i++;
-        setTimeout(tick, 700);
-      } else {
-        setTimeout(() => navigate('/analysis'), 500);
-      }
-    };
-    tick();
+
+    try {
+      // Stage 1 — upload
+      await advanceTo(ANALYSIS_STAGES[0].pct, ANALYSIS_STAGES[0].label);
+      const uploadResult = await uploadContract(file);
+      const mongoId = uploadResult.contractId; // MongoDB ObjectId string
+
+      // Stage 2-3 — visual progress while waiting for text extraction
+      await advanceTo(ANALYSIS_STAGES[1].pct, ANALYSIS_STAGES[1].label);
+      await advanceTo(ANALYSIS_STAGES[2].pct, ANALYSIS_STAGES[2].label);
+
+      // Stage 4 — trigger AI analysis (this is the long-running call)
+      await advanceTo(ANALYSIS_STAGES[3].pct, ANALYSIS_STAGES[3].label);
+      await analyzeContract(mongoId);
+
+      // Stage 5-7 — visual completion stages
+      await advanceTo(ANALYSIS_STAGES[4].pct, ANALYSIS_STAGES[4].label);
+      await advanceTo(ANALYSIS_STAGES[5].pct, ANALYSIS_STAGES[5].label);
+      await advanceTo(ANALYSIS_STAGES[6].pct, ANALYSIS_STAGES[6].label);
+
+      // Persist MongoDB _id so Reports can use it even after page refresh
+      localStorage.setItem('contractId', mongoId);
+
+      // Navigate to the analysis page, carrying the MongoDB _id in router state
+      setTimeout(() => navigate('/analysis', { state: { contractId: mongoId } }), 400);
+
+    } catch (err) {
+      setIsAnalysing(false);
+      setActiveStep(1);
+      setAnalysisError(
+        err?.response?.data?.error?.message ||
+        err?.message ||
+        'Analysis failed. Please check your connection and try again.'
+      );
+    }
   };
 
   const dropBorderColor = isDragReject
@@ -170,7 +219,7 @@ export default function UploadContract() {
             <CardContent sx={{ p: 3 }}>
               {!isAnalysing ? (
                 <>
-                  {/* Drop zone — professional illustrated area */}
+                  {/* Drop zone */}
                   <Box
                     {...getRootProps()}
                     sx={{
@@ -241,6 +290,12 @@ export default function UploadContract() {
                     <Alert severity="error" sx={{ mt: 2 }}>{rejectionError}</Alert>
                   )}
 
+                  {analysisError && (
+                    <Alert severity="error" sx={{ mt: 2 }} onClose={() => setAnalysisError('')}>
+                      {analysisError}
+                    </Alert>
+                  )}
+
                   {/* File preview */}
                   {file && (
                     <Box sx={{ mt: 3 }}>
@@ -260,7 +315,7 @@ export default function UploadContract() {
                       variant="contained"
                       size="large"
                       startIcon={<PlayArrowIcon />}
-                      onClick={simulateAnalysis}
+                      onClick={runAnalysis}
                       disabled={!file}
                       sx={{ fontWeight: 700, minWidth: 180 }}
                     >

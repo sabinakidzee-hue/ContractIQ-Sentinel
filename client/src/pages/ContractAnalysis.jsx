@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box, Grid, Card, CardContent, Typography, Button,
   Table, TableBody, TableCell, TableContainer, TableHead,
@@ -27,6 +27,7 @@ import {
   dummyDeviations, dummyRecommendations,
 } from '../data/dummyData';
 import { AnalysisSectionSkeleton } from '../components/common/DashboardSkeleton';
+import { getAnalysis } from '../api/analysis.api';
 
 // ─── Severity config ──────────────────────────────────────────────────────────
 const SEVERITY = {
@@ -158,50 +159,139 @@ function RiskBreakdownBar({ item }) {
 
 export default function ContractAnalysis() {
   const navigate = useNavigate();
+  const location = useLocation();
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // Simulate AI analysis fetch with skeleton
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setLoading(false);
-      // Persist the analysed contract ID so Reports page can pick it up
-      // whether the user navigates there directly or refreshes the page.
-      localStorage.setItem('contractId', dummyContract.id);
-    }, 1200);
-    return () => clearTimeout(t);
-  }, []);
+  // ── Resolve MongoDB _id ──────────────────────────────────────────────────────
+  // Priority: router state (just navigated from upload) → localStorage (page refresh)
+  const mongoId =
+    location.state?.contractId ||
+    localStorage.getItem('contractId') ||
+    null;
 
-  const contract = dummyContract;
-  const summary = dummyExecutiveSummary;
-  const risk = dummyRiskAssessment;
-  const deviations = dummyDeviations;
-  const recommendations = dummyRecommendations;
+  // ── Analysis data ─────────────────────────────────────────────────────────────
+  // When a real MongoDB _id is available we fetch live data from the API.
+  // If no _id exists (e.g. direct navigation during development) we fall back
+  // to the dummy dataset so the UI remains functional.
+  const [contract,        setContract]        = useState(null);
+  const [summary,         setSummary]         = useState('');
+  const [risk,            setRisk]            = useState(null);
+  const [deviations,      setDeviations]      = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
+  const [fetchError,      setFetchError]      = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      setFetchError('');
+
+      if (mongoId) {
+        // ── Live path: fetch real analysis from backend ──────────────────────
+        try {
+          const data = await getAnalysis(mongoId);
+          if (cancelled) return;
+
+          const c = data.contract;
+          const a = data.analysis;
+
+          setContract({
+            // Normalise backend fields to the shape the render code expects
+            _id:           String(c._id),
+            id:            c.contractId || String(c._id),   // business display ID
+            title:         c.title,
+            contractType:  c.contractType || 'Unknown',
+            parties:       c.parties || [],
+            effectiveDate: c.effectiveDate
+              ? new Date(c.effectiveDate).toLocaleDateString()
+              : '—',
+            expiryDate: c.expiryDate
+              ? new Date(c.expiryDate).toLocaleDateString()
+              : '—',
+            contractValue: c.contractValue || '—',
+            status:        c.status,
+          });
+
+          setSummary(a.executiveSummary || '');
+          setRisk({
+            overallScore: a.riskScore,
+            level:        a.riskLevel,
+            breakdown:    a.riskBreakdown || [],
+          });
+          setDeviations(a.deviations || []);
+          setRecommendations(a.recommendedActions || []);
+        } catch (err) {
+          if (cancelled) return;
+          setFetchError(
+            err?.response?.data?.error?.message ||
+            err?.message ||
+            'Failed to load analysis. Showing demo data.'
+          );
+          // Fall back to dummy data so the UI stays usable
+          loadDummy();
+        }
+      } else {
+        // ── Fallback path: no _id → show dummy data ──────────────────────────
+        // Small delay to keep the skeleton visible for a polished feel
+        await new Promise((r) => setTimeout(r, 800));
+        if (!cancelled) loadDummy();
+      }
+
+      if (!cancelled) setLoading(false);
+    };
+
+    const loadDummy = () => {
+      setContract({ ...dummyContract, _id: null });
+      setSummary(dummyExecutiveSummary);
+      setRisk(dummyRiskAssessment);
+      setDeviations(dummyDeviations);
+      setRecommendations(dummyRecommendations);
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, [mongoId]);
+
+  // ── Navigate to Reports, always carrying the MongoDB _id ────────────────────
+  const goToReports = () => {
+    // Use the real MongoDB _id when available; fall back to whatever is in state
+    // so the "No contract selected" guard in Reports still works correctly.
+    const idToPass = mongoId;
+    navigate('/reports', { state: { contractId: idToPass } });
+  };
 
   if (loading) return <AnalysisSectionSkeleton />;
 
   const criticalCount = deviations.filter((d) => d.severity === 'critical').length;
-  const highCount = deviations.filter((d) => d.severity === 'high').length;
-  const mediumCount = deviations.filter((d) => d.severity === 'medium').length;
-  const lowCount = deviations.filter((d) => d.severity === 'low').length;
+  const highCount     = deviations.filter((d) => d.severity === 'high').length;
+  const mediumCount   = deviations.filter((d) => d.severity === 'medium').length;
+  const lowCount      = deviations.filter((d) => d.severity === 'low').length;
 
   return (
     <Box>
       <SectionHeader
         title="Contract Analysis"
-        subtitle={`AI Analysis — ${contract.title}`}
+        subtitle={`AI Analysis — ${contract?.title ?? '…'}`}
         action={
           <Button
             variant="contained"
             startIcon={<DownloadOutlinedIcon />}
-            onClick={() => navigate('/reports', { state: { contractId: contract.id } })}
+            onClick={goToReports}
             sx={{ fontWeight: 700 }}
           >
             Export Report
           </Button>
         }
       />
+
+      {fetchError && (
+        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setFetchError('')}>
+          {fetchError}
+        </Alert>
+      )}
 
       {/* Contract metadata bar */}
       <Card sx={{ mb: 3 }}>
@@ -212,7 +302,7 @@ export default function ContractAnalysis() {
                 <AssignmentOutlinedIcon sx={{ color: '#0f62fe', fontSize: 20 }} />
                 <Box>
                   <Typography variant="caption" color="text.secondary">Contract</Typography>
-                  <Typography variant="body2" fontWeight={700}>{contract.title}</Typography>
+                  <Typography variant="body2" fontWeight={700}>{contract?.title}</Typography>
                 </Box>
               </Box>
             </Grid>
@@ -221,7 +311,7 @@ export default function ContractAnalysis() {
                 <BusinessOutlinedIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
                 <Box>
                   <Typography variant="caption" color="text.secondary">Type</Typography>
-                  <Typography variant="body2">{contract.contractType}</Typography>
+                  <Typography variant="body2">{contract?.contractType}</Typography>
                 </Box>
               </Box>
             </Grid>
@@ -230,7 +320,7 @@ export default function ContractAnalysis() {
                 <AttachMoneyOutlinedIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
                 <Box>
                   <Typography variant="caption" color="text.secondary">Value</Typography>
-                  <Typography variant="body2" fontWeight={600}>{contract.contractValue}</Typography>
+                  <Typography variant="body2" fontWeight={600}>{contract?.contractValue}</Typography>
                 </Box>
               </Box>
             </Grid>
@@ -239,12 +329,12 @@ export default function ContractAnalysis() {
                 <CalendarTodayOutlinedIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
                 <Box>
                   <Typography variant="caption" color="text.secondary">Effective</Typography>
-                  <Typography variant="body2">{contract.effectiveDate}</Typography>
+                  <Typography variant="body2">{contract?.effectiveDate}</Typography>
                 </Box>
               </Box>
             </Grid>
             <Grid item xs={6} sm={3} md={2} sx={{ display: 'flex', justifyContent: { md: 'flex-end' } }}>
-              <StatusChip status={contract.status} />
+              <StatusChip status={contract?.status} />
             </Grid>
           </Grid>
         </CardContent>
@@ -259,7 +349,7 @@ export default function ContractAnalysis() {
               <Typography variant="overline" color="text.secondary" gutterBottom>
                 Overall Risk Score
               </Typography>
-              <RiskScoreGauge score={risk.overallScore} />
+              <RiskScoreGauge score={risk?.overallScore ?? 0} />
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
                 Based on {deviations.length} clause deviations
               </Typography>
@@ -288,7 +378,7 @@ export default function ContractAnalysis() {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <LinearProgress
                       variant="determinate"
-                      value={(s.count / deviations.length) * 100}
+                      value={deviations.length > 0 ? (s.count / deviations.length) * 100 : 0}
                       sx={{
                         width: 80, height: 6,
                         bgcolor: 'action.hover',
@@ -310,7 +400,7 @@ export default function ContractAnalysis() {
               <Typography variant="overline" color="text.secondary" gutterBottom>
                 Risk by Category
               </Typography>
-              {risk.breakdown.slice(0, 5).map((item) => (
+              {(risk?.breakdown ?? []).slice(0, 5).map((item) => (
                 <RiskBreakdownBar key={item.category} item={item} />
               ))}
             </CardContent>
@@ -356,7 +446,7 @@ export default function ContractAnalysis() {
                   sx={{ bgcolor: '#8a3ffc', color: '#fff', fontWeight: 700, fontSize: '0.65rem', height: 22 }}
                 />
               </Box>
-              {summary.split('\n\n').map((para, i) => (
+              {(summary || '').split('\n\n').map((para, i) => (
                 <Typography key={i} variant="body1" paragraph sx={{ lineHeight: 1.8, '&:last-child': { mb: 0 } }}>
                   {para}
                 </Typography>
@@ -365,10 +455,10 @@ export default function ContractAnalysis() {
 
             <Grid container spacing={2} sx={{ mt: 2 }}>
               {[
-                { label: 'Contract ID', value: contract.id },
-                { label: 'Parties', value: contract.parties.join(' · ') },
-                { label: 'Effective Date', value: contract.effectiveDate },
-                { label: 'Expiry Date', value: contract.expiryDate },
+                { label: 'Contract ID',    value: contract?.id || contract?._id || '—' },
+                { label: 'Parties',        value: (contract?.parties ?? []).join(' · ') || '—' },
+                { label: 'Effective Date', value: contract?.effectiveDate || '—' },
+                { label: 'Expiry Date',    value: contract?.expiryDate || '—' },
               ].map((item) => (
                 <Grid item xs={12} sm={6} key={item.label}>
                   <Box sx={{ p: 2, bgcolor: 'background.default', border: 1, borderColor: 'divider' }}>
@@ -402,7 +492,7 @@ export default function ContractAnalysis() {
                 </TableHead>
                 <TableBody>
                   {deviations.map((d, i) => (
-                    <DeviationRow key={d.id} deviation={d} index={i} />
+                    <DeviationRow key={d.id ?? d._id ?? i} deviation={d} index={i} />
                   ))}
                 </TableBody>
               </Table>
@@ -416,8 +506,8 @@ export default function ContractAnalysis() {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {recommendations.map((rec) => {
                 const statusColors = {
-                  urgent: { bg: '#fff1f1', border: '#ffb3b8', color: '#da1e28' },
-                  required: { bg: '#fff7ed', border: '#fcd34d', color: '#b45309' },
+                  urgent:      { bg: '#fff1f1', border: '#ffb3b8', color: '#da1e28' },
+                  required:    { bg: '#fff7ed', border: '#fcd34d', color: '#b45309' },
                   recommended: { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8' },
                 };
                 const sc = statusColors[rec.status] ?? statusColors.recommended;
@@ -468,7 +558,7 @@ export default function ContractAnalysis() {
               <Button
                 variant="contained"
                 startIcon={<DownloadOutlinedIcon />}
-                onClick={() => navigate('/reports', { state: { contractId: contract.id } })}
+                onClick={goToReports}
                 sx={{ fontWeight: 700 }}
               >
                 Export Full Report
