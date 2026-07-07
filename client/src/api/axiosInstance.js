@@ -20,11 +20,9 @@ import axios from 'axios';
  *   ERROR path — normalises the AxiosError into a plain object:
  *     { message, code, details, status }
  */
-
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
   timeout: 30_000,
-  headers: { 'Content-Type': 'application/json' },
 });
 
 console.log("VITE_API_URL =", import.meta.env.VITE_API_URL);
