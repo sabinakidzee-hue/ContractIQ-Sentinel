@@ -19,12 +19,7 @@ import SectionHeader from '../components/common/SectionHeader';
 import StatusChip from '../components/common/StatusChip';
 import ErrorBanner from '../components/common/ErrorBanner';
 import { exportReport, listReports, getDownloadUrl } from '../api/reports.api';
-import { dummyDeviations } from '../data/dummyData';
-
 // ─── Constants ────────────────────────────────────────────────────────────────
-// Demo contract ID — in production this comes from the ContractAnalysis page state
-// or a URL param. Hardcoded here so the Reports page works standalone.
-// null → shows "select a contract" prompt
 
 const SHEET_DEFS = [
   {
@@ -526,15 +521,13 @@ const contractId =
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {dummyDeviations.slice(0, 3).map((d, i) => (
-                      <TableRow key={i} sx={{ bgcolor: i % 2 === 1 ? '#f4f4f4' : '#fff' }}>
-                        <TableCell sx={{ fontSize: '0.75rem' }}>{i + 1}</TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem', fontWeight: 600 }}>{d.clauseTitle}</TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{d.section}</TableCell>
-                        <TableCell><StatusChip status={d.severity} /></TableCell>
-                        <TableCell sx={{ fontSize: '0.7rem', maxWidth: 160 }}>
-                          <Typography variant="caption" noWrap sx={{ display: 'block' }}>{d.recommendation}</Typography>
-                        </TableCell>
+                    {[1, 2, 3].map((n, i) => (
+                      <TableRow key={n} sx={{ bgcolor: i % 2 === 1 ? '#f4f4f4' : '#fff' }}>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>{n}</TableCell>
+                        <TableCell><Skeleton variant="text" width={120} height={14} /></TableCell>
+                        <TableCell><Skeleton variant="text" width={60}  height={14} /></TableCell>
+                        <TableCell><Skeleton variant="text" width={50}  height={14} /></TableCell>
+                        <TableCell><Skeleton variant="text" width={140} height={14} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

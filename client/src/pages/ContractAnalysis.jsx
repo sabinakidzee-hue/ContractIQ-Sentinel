@@ -164,7 +164,12 @@ export default function ContractAnalysis() {
 
   // Simulate AI analysis fetch with skeleton
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 1200);
+    const t = setTimeout(() => {
+      setLoading(false);
+      // Persist the analysed contract ID so Reports page can pick it up
+      // whether the user navigates there directly or refreshes the page.
+      localStorage.setItem('contractId', dummyContract.id);
+    }, 1200);
     return () => clearTimeout(t);
   }, []);
 
@@ -190,7 +195,7 @@ export default function ContractAnalysis() {
           <Button
             variant="contained"
             startIcon={<DownloadOutlinedIcon />}
-            onClick={() => navigate('/reports')}
+            onClick={() => navigate('/reports', { state: { contractId: contract.id } })}
             sx={{ fontWeight: 700 }}
           >
             Export Report
@@ -463,7 +468,7 @@ export default function ContractAnalysis() {
               <Button
                 variant="contained"
                 startIcon={<DownloadOutlinedIcon />}
-                onClick={() => navigate('/reports')}
+                onClick={() => navigate('/reports', { state: { contractId: contract.id } })}
                 sx={{ fontWeight: 700 }}
               >
                 Export Full Report
