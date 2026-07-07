@@ -4,15 +4,19 @@ import api from './axiosInstance';
  * contracts.api.js
  * ──────────────────────────────────────────────────────────────────────────────
  * All API calls related to contract upload and analysis.
+ *
+ * NOTE: axiosInstance's response interceptor already unwraps the API envelope
+ * { success, data, message } → returns the payload directly.
+ * Functions here simply return the resolved value from the interceptor.
  */
 
 /**
  * Upload a PDF or DOCX contract file.
  *
- * @param {File}   file           Browser File object from the dropzone.
- * @param {Object} [meta]         Optional { title, contractType }
- * @param {Function} [onProgress] Optional upload progress callback (0–100).
- * @returns {Promise<Object>}     { contractId, title, fileType, fileSize, status, uploadedAt }
+ * @param {File}     file          Browser File object from the dropzone.
+ * @param {Object}   [meta]        Optional { title, contractType }
+ * @param {Function} [onProgress]  Optional upload progress callback (0–100).
+ * @returns {Promise<Object>}      { contractId, title, fileType, fileSize, status, uploadedAt }
  */
 export async function uploadContract(file, meta = {}, onProgress) {
   const formData = new FormData();
@@ -20,15 +24,15 @@ export async function uploadContract(file, meta = {}, onProgress) {
   if (meta.title)        formData.append('title', meta.title);
   if (meta.contractType) formData.append('contractType', meta.contractType);
 
-  const response = await api.post('/contracts/upload', formData, {
-    headers:         { 'Content-Type': 'multipart/form-data' },
-    timeout:         60_000,   // 60s for large files
-    onUploadProgress: onProgress
-      ? (e) => onProgress(Math.round((e.loaded * 100) / (e.total || 1)))
-      : undefined,
-  });
-
-  return response.data;
+  // Do NOT set Content-Type manually — browser must set it with the
+  // correct multipart boundary when FormData is the body.
+const response = await api.post('/contracts/upload', formData, {
+  timeout: 60_000,
+  onUploadProgress: onProgress
+    ? (e) => onProgress(Math.round((e.loaded * 100) / (e.total || 1)))
+    : undefined,
+});
+  return response;
 }
 
 /**
@@ -41,7 +45,7 @@ export async function analyzeContract(contractId) {
   const response = await api.post('/contracts/analyze', { contractId }, {
     timeout: 180_000,   // 3-minute timeout — Granite analysis can take time
   });
-  return response.data;
+  return response;
 }
 
 /**
@@ -52,7 +56,7 @@ export async function analyzeContract(contractId) {
  */
 export async function getContract(contractId) {
   const response = await api.get(`/contracts/${contractId}`);
-  return response.data;
+  return response;
 }
 
 /**
@@ -64,16 +68,16 @@ export async function getContract(contractId) {
  */
 export async function listContracts(page = 1, limit = 20) {
   const response = await api.get('/contracts', { params: { page, limit } });
-  return response.data;
+  return response;
 }
 
 /**
- * Delete a contract and its linked analysis.
+ * Delete a contract and its associated analysis.
  *
  * @param {string} contractId
  * @returns {Promise<Object>}  { deleted: contractId }
  */
 export async function deleteContract(contractId) {
   const response = await api.delete(`/contracts/${contractId}`);
-  return response.data;
+  return response;
 }

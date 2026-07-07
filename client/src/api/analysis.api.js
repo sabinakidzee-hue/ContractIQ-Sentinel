@@ -4,6 +4,9 @@ import api from './axiosInstance';
  * analysis.api.js
  * ──────────────────────────────────────────────────────────────────────────────
  * API calls for retrieving contract analysis results.
+ *
+ * NOTE: axiosInstance's response interceptor already unwraps the API envelope
+ * { success, data, message } → returns the payload directly.
  */
 
 /**
@@ -17,7 +20,7 @@ import api from './axiosInstance';
  */
 export async function getAnalysis(contractId) {
   const response = await api.get(`/analysis/${contractId}`);
-  return response.data;
+  return response;
 }
 
 /**
@@ -28,5 +31,5 @@ export async function getAnalysis(contractId) {
  */
 export async function listAnalyses(params = {}) {
   const response = await api.get('/analysis', { params });
-  return response.data;
+  return response;
 }

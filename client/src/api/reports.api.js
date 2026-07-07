@@ -3,53 +3,89 @@ import api from './axiosInstance';
 /**
  * reports.api.js
  * ──────────────────────────────────────────────────────────────────────────────
- * API calls for report generation and download.
+ * All API calls related to report generation, retrieval and download.
+ *
+ * NOTE:
+ * axiosInstance already unwraps the backend response:
+ *
+ *   { success: true, data: <payload>, message: '...' }
+ *
+ * into:
+ *
+ *   <payload>
+ *
+ * Therefore every function simply returns `response`.
  */
 
 /**
- * Triggers Excel report generation for a given contract.
+ * Generate an Excel report for a contract.
  *
- * @param {string} contractId  MongoDB ObjectId string.
- * @returns {Promise<Object>}  { reportId, fileName, riskScore, riskLevel, downloadUrl }
+ * @param {string} contractId MongoDB ObjectId.
+ * @returns {Promise<Object>}
+ * {
+ *   reportId,
+ *   fileName,
+ *   riskScore,
+ *   riskLevel,
+ *   downloadUrl
+ * }
  */
 export async function exportReport(contractId) {
-  const response = await api.post('/reports/export', { contractId }, {
-    timeout: 60_000,   // Excel generation can take a few seconds
-  });
-  return response.data;
+  const response = await api.post(
+    '/reports/export',
+    { contractId },
+    {
+      timeout: 60_000,
+    }
+  );
+
+  return response;
 }
 
 /**
- * Fetch report metadata by report ID.
+ * Fetch metadata for a generated report.
  *
  * @param {string} reportId
- * @returns {Promise<Object>}  Report document
+ * @returns {Promise<Object>}
  */
 export async function getReport(reportId) {
   const response = await api.get(`/reports/${reportId}`);
-  return response.data;
+  return response;
 }
 
 /**
- * Fetch a paginated list of all generated reports.
+ * Fetch paginated report history.
  *
- * @param {number} [page=1]
- * @param {number} [limit=20]
- * @returns {Promise<Object>}  { reports: [], pagination }
+ * @param {number} page
+ * @param {number} limit
+ * @returns {Promise<Object>}
+ * {
+ *   reports: [],
+ *   pagination: {...}
+ * }
  */
 export async function listReports(page = 1, limit = 20) {
-  const response = await api.get('/reports', { params: { page, limit } });
-  return response.data;
+  const response = await api.get('/reports', {
+    params: {
+      page,
+      limit,
+    },
+  });
+
+  return response;
 }
 
 /**
- * Returns the direct download URL for a report file.
- * Used to trigger a browser file download.
+ * Returns the download URL for a generated report.
+ * Used directly by the browser.
  *
  * @param {string} reportId
- * @returns {string}  Absolute URL to the .xlsx download endpoint
+ * @returns {string}
  */
 export function getDownloadUrl(reportId) {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const base =
+    import.meta.env.VITE_API_URL ||
+    'http://localhost:5000/api';
+
   return `${base}/reports/${reportId}/download`;
 }

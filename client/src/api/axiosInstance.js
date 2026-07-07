@@ -5,15 +5,20 @@ import axios from 'axios';
  * ──────────────────────────────────────────────────────────────────────────────
  * Pre-configured Axios instance for all ContractIQ Sentinel API calls.
  *
- * Base URL reads from VITE_API_URL env var (set in client/.env).
- * Falls back to http://localhost:5000/api for local development.
+ * Base URL reads from VITE_API_URL env var (baked in at build time by Vite).
+ *   • client/.env.development  → empty string  → Vite dev-server proxy forwards
+ *                                                 /api/* → localhost:5000/api/*
+ *   • client/.env.production   → full Render URL including /api suffix
+ *                                 e.g. https://contractiq-sentinel-api.onrender.com/api
  *
- * All requests include:
- *   - Content-Type: application/json
- *   - 30-second timeout
+ * Response interceptor — unwraps the API envelope one level:
+ *   Every backend response has the shape:
+ *     { success: true, data: <payload>, message: '...' }
+ *   The interceptor returns `response.data.data` so that every caller receives
+ *   the payload object directly — no need for callers to unwrap themselves.
  *
- * All responses are automatically unwrapped from the { success, data, message }
- * envelope so consuming code works directly with the payload.
+ *   ERROR path — normalises the AxiosError into a plain object:
+ *     { message, code, details, status }
  */
 
 const instance = axios.create({
@@ -22,15 +27,18 @@ const instance = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ─── Response interceptor — unwrap envelope ────────────────────────────────
+console.log("VITE_API_URL =", import.meta.env.VITE_API_URL);
+console.log("Axios baseURL =", instance.defaults.baseURL);
+
+// ─── Response interceptor ──────────────────────────────────────────────────────
 instance.interceptors.response.use(
-  (response) => {
-    // Return the inner `data` field from the standard envelope
-    // { success: true, data: {...}, message: '...' }
-    return response.data;
-  },
+  // Unwrap the standard API envelope { success, data, message } → return payload.
+  // Callers receive the payload directly without any further unwrapping.
+  (response) => response.data?.data ?? response.data,
+
+  // Normalise error shape so callers always receive a plain object
+  // with { message, code, details, status } instead of a raw AxiosError.
   (error) => {
-    // Normalise error shape so callers always get { message, code, details }
     const apiError = error.response?.data?.error;
     const normalised = {
       message: apiError?.message || error.message || 'An unexpected error occurred.',
