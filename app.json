@@ -1,0 +1,55 @@
+{
+  "name": "ContractIQ Sentinel",
+  "short_name": "ContractIQ",
+  "version": "1.0.0",
+  "description": "AI-Powered Enterprise Contract Intelligence Platform developed as part of the AICTE IBM SkillsBuild Internship. The platform automates contract analysis using IBM watsonx Orchestrate and IBM Granite models to identify clause deviations, assess risks, generate executive summaries, and produce enterprise-ready Excel reports.",
+  "author": {
+    "name": "Sabina Khan"
+  },
+  "project": {
+    "title": "ContractIQ Sentinel – AI Powered Enterprise Contract Intelligence Platform",
+    "category": "Enterprise AI / Legal Technology",
+    "internship": "AICTE IBM SkillsBuild Internship 2026"
+  },
+  "technology_stack": {
+    "frontend": [
+      "React",
+      "Vite"
+    ],
+    "backend": [
+      "Node.js",
+      "Express.js"
+    ],
+    "database": [
+      "MongoDB Atlas"
+    ],
+    "ai": [
+      "IBM watsonx Orchestrate",
+      "IBM Granite",
+      "IBM Bob"
+    ],
+    "deployment": [
+      "Render",
+      "Vercel",
+      "GitHub"
+    ]
+  },
+  "features": [
+    "Contract Upload",
+    "Text Extraction",
+    "Clause Parsing",
+    "Clause Deviation Detection",
+    "Risk Assessment",
+    "Executive Summary Generation",
+    "AI Recommendations",
+    "Excel Report Generation",
+    "Interactive Dashboard",
+    "Cloud Deployment"
+  ],
+  "deployment": {
+    "frontend": "Vercel",
+    "backend": "Render",
+    "database": "MongoDB Atlas"
+  },
+  "license": "MIT"
+}
