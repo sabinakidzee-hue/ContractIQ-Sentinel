@@ -188,7 +188,7 @@ ContractIQ-Sentinel
 Clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/ContractIQ-Sentinel.git
+git clone https://github.com/<sabinakidzee-hue>/ContractIQ-Sentinel.git
 ```
 
 Install dependencies
